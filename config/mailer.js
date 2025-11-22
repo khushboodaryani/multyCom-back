@@ -1,39 +1,40 @@
-import nodemailer from "nodemailer";
+import * as Brevo from "@getbrevo/brevo";
 import dotenv from "dotenv";
 dotenv.config();
 
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = process.env.SMTP_PORT;
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const FROM_EMAIL = process.env.FROM_EMAIL || process.env.SMTP_USER;
+const apiInstance = new Brevo.TransactionalEmailsApi();
+const apiKey = apiInstance.authentications['apiKey'];
 
-if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
-  console.warn("SMTP not fully configured. Emails will fail if attempted.");
-}
+apiKey.apiKey = process.env.BREVO_API_KEY;
 
-export const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: Number(SMTP_PORT),
-  secure: Number(SMTP_PORT) === 465, // true for 465, false for others
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS
-  }
-});
+const FROM_EMAIL = process.env.FROM_EMAIL || "khushboodaryani1@gmail.com";
+const FROM_NAME = "Khushboo Daryani"; 
 
-/**
- * sendNotificationEmail(payload)
- * payload: { to, subject, text, html? }
- */
 export async function sendNotificationEmail({ to, subject, text, html }) {
   if (!to) throw new Error("No recipient (to) provided");
-  const mailOptions = {
-    from: `"Khushboo Daryani" <${FROM_EMAIL}>`,
-    to,
-    subject,
-    text,
-    html
-  };
-  return transporter.sendMail(mailOptions);
+
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.sender = { "name": FROM_NAME, "email": FROM_EMAIL };
+  sendSmtpEmail.to = [{ "email": to }];
+
+  sendSmtpEmail.htmlContent = html || `<html><body><pre>${text}</pre></body></html>`;
+  
+  if (text) {
+      sendSmtpEmail.textContent = text;
+  }
+
+  try {
+    console.log(`Attempting to send email to ${to} via Brevo API...`);
+    const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log('Email sent successfully. Message ID:', data.messageId);
+    return data;
+  } catch (error) {
+    console.error('Error sending email via Brevo API:', error);
+    if (error.body) {
+        console.error('Brevo Error Body:', JSON.stringify(error.body, null, 2));
+    }
+    throw error;
+  }
 }
